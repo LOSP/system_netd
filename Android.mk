@@ -1,4 +1,4 @@
-ifeq($(BOARD_USE_NETD_LEGACY), true)
+ifeq ($(BOARD_USE_NETD_LEGACY), true)
 LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
