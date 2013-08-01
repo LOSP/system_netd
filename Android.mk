@@ -1,4 +1,3 @@
-ifeq ($(BOARD_USE_NETD_LEGACY), true)
 LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
@@ -70,4 +69,3 @@ LOCAL_CFLAGS :=
 LOCAL_SHARED_LIBRARIES := libcutils
 
 include $(BUILD_EXECUTABLE)
-endif
