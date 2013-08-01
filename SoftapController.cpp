@@ -52,18 +52,17 @@ SoftapController::SoftapController() {
     mSock = socket(AF_INET, SOCK_DGRAM, 0);
     if (mSock < 0)
         ALOGE("Failed to open socket");
+#ifndef HAVE_HOSTAPD
     memset(mIface, 0, sizeof(mIface));
+#endif
 }
 
 SoftapController::~SoftapController() {
     if (mSock >= 0)
         close(mSock);
 }
-
+#ifndef HAVE_HOSTAPD
 int SoftapController::setCommand(char *iface, const char *fname, unsigned buflen) {
-#ifdef HAVE_HOSTAPD
-    return 0;
-#else
     char tBuf[SOFTAP_MAX_BUFFER_SIZE];
     struct iwreq wrq;
     struct iw_priv_args *priv_ptr;
@@ -116,7 +115,7 @@ int SoftapController::setCommand(char *iface, const char *fname, unsigned buflen
     wrq.u.data.flags = sub_cmd;
     ret = ioctl(mSock, cmd, &wrq);
     return ret;
-#endif
+
 }
 
 int SoftapController::startDriver(char *iface) {
@@ -137,11 +136,6 @@ int SoftapController::startDriver(char *iface) {
         ALOGE("Softap driver start: %d", ret);
         return ret;
     }
-#ifdef HAVE_HOSTAPD
-    ifc_init();
-    ret = ifc_up(iface);
-    ifc_close();
-#endif
     usleep(AP_DRIVER_START_DELAY);
     ALOGD("Softap driver start: %d", ret);
     return ret;
@@ -159,18 +153,11 @@ int SoftapController::stopDriver(char *iface) {
         iface = mIface;
     }
     *mBuf = 0;
-#ifdef HAVE_HOSTAPD
-    ifc_init();
-    ret = ifc_down(iface);
-    ifc_close();
-    if (ret < 0) {
-        ALOGE("Softap %s down: %d", iface, ret);
-    }
-#endif
     ret = setCommand(iface, "STOP");
     ALOGD("Softap driver stop: %d", ret);
     return ret;
 }
+#endif
 
 int SoftapController::startSoftap() {
     pid_t pid = 1;
@@ -202,6 +189,7 @@ int SoftapController::startSoftap() {
         ALOGE("Should never get here!");
         return -1;
     } else {
+#ifndef HAVE_HOSTAPD
         *mBuf = 0;
         ret = setCommand(mIface, "AP_BSS_START");
         if (ret) {
@@ -212,13 +200,20 @@ int SoftapController::startSoftap() {
            ALOGD("Softap startap - Ok");
            usleep(AP_BSS_START_DELAY);
         }
+#else
+        mPid = pid;
+        ALOGD("Softap startap - Ok");
+        usleep(AP_BSS_START_DELAY);
+#endif
     }
     return ret;
 
 }
 
 int SoftapController::stopSoftap() {
+#ifndef HAVE_HOSTAPD
     int ret;
+#endif
 
     if (mPid == 0) {
         ALOGE("Softap already stopped");
@@ -234,18 +229,28 @@ int SoftapController::stopSoftap() {
         ALOGE("Softap stopap - failed to open socket");
         return -1;
     }
+#ifndef HAVE_HOSTAPD
     *mBuf = 0;
     ret = setCommand(mIface, "AP_BSS_STOP");
+#endif
     mPid = 0;
+#ifndef HAVE_HOSTAPD
     ALOGD("Softap service stopped: %d", ret);
+#else
+    ALOGD("Softap service stopped");
+#endif
     usleep(AP_BSS_STOP_DELAY);
+#ifndef HAVE_HOSTAPD
     return ret;
+#else
+    return 0;
+#endif
 }
 
 bool SoftapController::isSoftapStarted() {
     return (mPid != 0 ? true : false);
 }
-
+#ifndef HAVE_HOSTAPD
 int SoftapController::addParam(int pos, const char *cmd, const char *arg)
 {
     if (pos < 0)
@@ -257,7 +262,7 @@ int SoftapController::addParam(int pos, const char *cmd, const char *arg)
     pos += sprintf(&mBuf[pos], "%s=%s,", cmd, arg);
     return pos;
 }
-
+#endif
 /*
  * Arguments:
  *      argv[2] - wlan interface
@@ -282,16 +287,17 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
         ALOGE("Softap set - missing arguments");
         return -1;
     }
-
+#ifndef HAVE_HOSTAPD
     strncpy(mIface, argv[3], sizeof(mIface));
+#endif
     iface = argv[2];
 
 #ifdef HAVE_HOSTAPD
     char *wbuf = NULL;
     char *fbuf = NULL;
 
-    if (argc > 3) {
-        ssid = argv[3];
+    if (argc > 4) {
+        ssid = argv[4];
     } else {
         ssid = (char *)"AndroidAP";
     }
@@ -299,14 +305,14 @@ int SoftapController::setSoftap(int argc, char *argv[]) {
     asprintf(&wbuf, "interface=%s\ndriver=" HOSTAPD_DRIVER_NAME "\nctrl_interface="
             "/data/misc/wifi/hostapd\nssid=%s\nchannel=6\nieee80211n=1\n", iface, ssid);
 
-    if (argc > 4) {
-        if (!strcmp(argv[4], "wpa-psk")) {
-            generatePsk(ssid, argv[5], psk_str);
+    if (argc > 5) {
+        if (!strcmp(argv[5], "wpa-psk")) {
+            generatePsk(ssid, argv[6], psk_str);
             asprintf(&fbuf, "%swpa=1\nwpa_pairwise=TKIP CCMP\nwpa_psk=%s\n", wbuf, psk_str);
-        } else if (!strcmp(argv[4], "wpa2-psk")) {
-            generatePsk(ssid, argv[5], psk_str);
+        } else if (!strcmp(argv[5], "wpa2-psk")) {
+            generatePsk(ssid, argv[6], psk_str);
             asprintf(&fbuf, "%swpa=2\nrsn_pairwise=CCMP\nwpa_psk=%s\n", wbuf, psk_str);
-        } else if (!strcmp(argv[4], "open")) {
+        } else if (!strcmp(argv[5], "open")) {
             asprintf(&fbuf, "%s", wbuf);
         }
     } else {
@@ -460,6 +466,7 @@ int SoftapController::fwReloadSoftap(int argc, char *argv[])
 
 int SoftapController::clientsSoftap(char **retbuf)
 {
+#ifndef HAVE_HOSTAPD
     int ret;
 
     if (mSock < 0) {
@@ -475,4 +482,7 @@ int SoftapController::clientsSoftap(char **retbuf)
         ALOGD("Softap clients:%s", mBuf);
     }
     return ret;
+#else
+    return 0;
+#endif
 }
