@@ -743,15 +743,12 @@ int CommandListener::SoftapCmd::runCommand(SocketClient *cli,
                      "Missing argument in a SoftAP command", false);
         return 0;
     }
-#ifndef HAVE_HOSTAPD
+
     if (!strcmp(argv[1], "start")) {
         rc = sSoftapCtrl->startDriver(argv[2]);
     } else if (!strcmp(argv[1], "stop")) {
         rc = sSoftapCtrl->stopDriver(argv[2]);
     } else if (!strcmp(argv[1], "startap")) {
-#else
-    if (!strcmp(argv[1], "startap")) {
-#endif
         rc = sSoftapCtrl->startSoftap();
     } else if (!strcmp(argv[1], "stopap")) {
         rc = sSoftapCtrl->stopSoftap();
